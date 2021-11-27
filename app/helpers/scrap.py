@@ -1,6 +1,6 @@
 import bs4
 import requests
-from typing import Dict
+from typing import Dict, List
 
 
 def scrap(url: str) -> bs4.BeautifulSoup:
@@ -18,7 +18,6 @@ def get_name(soup: bs4.BeautifulSoup) -> str:
         f'{BODY_DIV_CONTENT} h1[id="firstHeading"] i'
     )
     name = div[0].text
-    print(name)
     return name
 
 
@@ -39,8 +38,42 @@ def get_temporal_range(soup: bs4.BeautifulSoup) -> str:
     span_time: str = ""
     for span in spans:
         span_time += span.text if span.text else ""
-    print(f"{a.text} ({span_time})")
-    return f"{a.text} ({span_time})"
+    return f"{a.text} ({span_time})".replace("\xa0", " ")
+
+
+def get_species(tag: bs4.Tag) -> str:
+    b: bs4.ResultSet[bs4.Tag] = tag.select("i b")
+    if b:
+        return b[0].text.strip()
+
+    i: bs4.ResultSet[bs4.Tag] = tag.select("b span i")
+    if i:
+        return i[0].text.strip()
+
+
+def get_scientific_classification(soup: bs4.BeautifulSoup, classification: str) -> str:
+    trs: bs4.ResultSet[bs4.Tag] = soup.select(f"{DIV_CONTENT_TABLE} tr")
+    matches: List[str] = []
+    for tr in trs:
+        tds: bs4.ResultSet[bs4.Tag] = tr.select("td")
+        if len(tds) == 2 and classification != "species":
+            if tds[0].text.strip() == classification.capitalize() + ":":
+                a = tds[1].select("a")
+                # print(tds[0].text.strip(), a[0].text)
+                matches.append(a[0].text.strip())
+        elif len(tds) == 1 and classification == "species":
+            species: str = get_species(tds[0])
+            if species:
+                matches.append(species)
+        else:
+            continue
+
+    if len(matches) == 0:
+        return None
+    elif len(matches) == 1:
+        return matches[0]
+    else:
+        return matches
 
 
 def get_data(dinosaur_name: str) -> Dict:
@@ -49,4 +82,12 @@ def get_data(dinosaur_name: str) -> Dict:
     soup: bs4.BeautifulSoup = scrap(url)
     dinosaur_data["name"] = get_name(soup)
     dinosaur_data["temporalRange"] = get_temporal_range(soup)
+    dinosaur_data["kingdom"] = get_scientific_classification(soup, "kingdom")
+    dinosaur_data["phylum"] = get_scientific_classification(soup, "phylum")
+    dinosaur_data["clade"] = get_scientific_classification(soup, "clade")
+    dinosaur_data["family"] = get_scientific_classification(soup, "family")
+    dinosaur_data["subfamily"] = get_scientific_classification(soup, "subfamily")
+    dinosaur_data["genus"] = get_scientific_classification(soup, "genus")
+    dinosaur_data["species"] = get_scientific_classification(soup, "species")
+    print(dinosaur_data)
     return dinosaur_data
